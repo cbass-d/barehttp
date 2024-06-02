@@ -11,3 +11,6 @@ $ ./build.sh -t ## Runs the server with strace (useful for debugging)
 ```
 Requirements:
 * nasm
+
+To-do:
+* Use forking to hanlde connections
