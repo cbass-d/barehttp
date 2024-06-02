@@ -30,6 +30,9 @@ section .data
 
     accepting_msg db "(+) Accepting connections on localhost:4545", 0xa, 0
     accepting_msg_len equ $ - accepting_msg
+    
+    connection_msg db "(+) Connection received", 0xa, 0
+    connection_msg_len equ $ - connection_msg
 
     create_error_msg db "(-) Could not create socket.", 0xa, 0
     create_error_msg_len equ $ - create_error_msg
@@ -114,7 +117,7 @@ _start:
     ;; Make listen call using created sockfd
     mov rax, 0x32
     mov rdi, [sockfd]
-    mov rsi, 5
+    mov rsi, 5		;; Max queue length of 5
     syscall
 
     cmp rax, 0
@@ -126,42 +129,58 @@ _start:
     mov rdx, listening_msg_len
     syscall
 
-    ;; Make fork call
-    ;; Child process will handle connections
-    mov rax, 0x39
-    syscall
-    cmp rax, 0
-    je accept_handler
-
     mov rax, 0x01
     mov rdi, 1
     lea rsi, accepting_msg
     mov rdx, accepting_msg_len
     syscall
 
-    ;; Wait call:
-    ;; waits for child to terminate
-    mov rax, 0x3d
-    mov rdi, -1
-    mov rsi, 0
-    mov rdx, 0
-    syscall
-
-    jmp exit
-
-accept_handler:
+    ;; Main accept loop
+ loop:
     ;; Make accept call
     mov rax, 0x2b
     mov rdi, [sockfd]
     mov rsi, 0
     mov rdx, 0
     syscall
-
+    
     cmp rax, 0
     jle accept_error
-
-    ;; Store the clientfd created
+    
+    ;; Store client fd
     mov [clientfd], rax
+	
+    ;; Fork call
+    ;; Child process will handle connections
+   ;; mov rax, 0x39
+    ;;syscall
+    ;;cmp rax, 0
+    jmp connection_handler
+    
+    ;; Close client fd in parent
+   ;; mov rax, 0x03
+   ;; mov rdi, [clientfd]
+
+    ;; Wait call
+    ;;mov rax, 0x3d
+    ;;mov rdi, -1
+    ;;mov rsi, 0
+    ;;mov rdx, 0
+    ;;syscall
+
+    ;;jmp loop
+
+connection_handler:
+    mov rax, 0x01
+    mov rdi, 1
+    lea rsi, connection_msg
+    mov rdx, connection_msg_len
+    syscall
+
+    ;; Close listener fd in child
+    ;;mov rax, 0x03
+    ;;mov rdi, [sockfd]
+    ;;syscall
 
     ;; Send HTTP 200 to client
     mov rax, 0x2c
@@ -173,7 +192,13 @@ accept_handler:
     mov r9, 0
     syscall
 
-    jmp close_server
+    mov rax, 0x03
+    mov rdi, [clientfd]
+    syscall
+ 
+    ;; Set exit code to 0
+    mov rdi, 0
+    jmp loop
 
 create_error:
     mov rax, 0x01
